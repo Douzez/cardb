@@ -2,12 +2,12 @@ package com.packt.cardatabase.repositorry;
 
 import java.util.List;
 
+import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
-import org.springframework.data.repository.CrudRepository;
 
 import com.packt.cardatabase.domain.Car;
 
-public interface CarRepository extends CrudRepository<Car, Long> {
+public interface CarRepository extends JpaRepository<Car, Long> {
 
 	// Fetch cars by brand
 	List<Car> findByBrand(String brand);
