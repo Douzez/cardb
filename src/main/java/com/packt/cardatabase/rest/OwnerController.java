@@ -9,6 +9,8 @@ import java.util.stream.Collectors;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.hateoas.CollectionModel;
 import org.springframework.hateoas.EntityModel;
+import org.springframework.hateoas.IanaLinkRelations;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -58,25 +60,33 @@ public class OwnerController {
 	// Find Owners by name
 	@GetMapping("/search/name/{firstName}")
 	public CollectionModel<EntityModel<Owner>> findByFirstName(@PathVariable String firstName){
+		
 		List<EntityModel<Owner>> owners = ownerRepository.findByFirstName(firstName).stream()
 				.map(assembler::toModel)
 				.collect(Collectors.toList());
+				
 		return CollectionModel.of(owners,
-					linkTo(methodOn(OwnerController.class).getAllOwners()).withRel("owners"));
+				linkTo(methodOn(OwnerController.class).getAllOwners()).withRel("owners"));
+		
 	}
 	
 	// Save an Owner
 	@PostMapping
-	public EntityModel<Owner> newCar(@RequestBody Owner newOwner){
-		Owner owner = ownerRepository.save(newOwner);
-		return assembler.toModel(owner);
+	public ResponseEntity<?> newCar(@RequestBody Owner newOwner){
+		// EntityModel<Owner>
+		EntityModel<Owner> entityModel = assembler.toModel(ownerRepository.save(newOwner));
+		
+		return ResponseEntity
+				.created(entityModel.getRequiredLink(IanaLinkRelations.SELF).toUri())
+				.body(entityModel);
+		
 	}
 	
 	// TODO: finish HATEOAS for following methods
 	// Update an Owner
 	@PutMapping("/{ownerId}")
-	public Owner updateOwnerInfo(@RequestBody Owner newOwner, @PathVariable Long ownerId) {
-		return ownerRepository.findById(ownerId)
+	public ResponseEntity<?> updateOwnerInfo(@RequestBody Owner newOwner, @PathVariable Long ownerId) {
+		Owner updatedOwner = ownerRepository.findById(ownerId)
 				.map(owner -> {
 					owner.setFirstName(newOwner.getFirstName());
 					owner.setLastName(newOwner.getLastName());
@@ -86,12 +96,20 @@ public class OwnerController {
 					newOwner.setOwnerId(ownerId);
 					return ownerRepository.save(newOwner);
 				});
+		
+		EntityModel<Owner> entityModel = assembler.toModel(updatedOwner);
+		
+		return ResponseEntity
+				.created(entityModel.getRequiredLink(IanaLinkRelations.SELF).toUri())
+				.body(entityModel);
 	}
 	
 	// Delete Owner
 	@DeleteMapping("/{id}")
-	public void deleteOwner(@PathVariable Long id) {
+	public ResponseEntity<?> deleteOwner(@PathVariable Long id) {
 		ownerRepository.deleteById(id);
+		
+		return ResponseEntity.noContent().build();
 	}
 		
 }

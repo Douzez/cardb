@@ -4,9 +4,13 @@ import static org.springframework.hateoas.server.mvc.WebMvcLinkBuilder.linkTo;
 import static org.springframework.hateoas.server.mvc.WebMvcLinkBuilder.methodOn;
 
 import java.util.List;
+import java.util.stream.Collectors;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.hateoas.CollectionModel;
 import org.springframework.hateoas.EntityModel;
+import org.springframework.hateoas.IanaLinkRelations;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -25,16 +29,23 @@ import com.packt.cardatabase.repositorry.CarRepository;
 public class CarController {
 
 	private CarRepository carRepository;
+	private CarModelAssembler assembler;
 	
 	@Autowired
-	public CarController(CarRepository carRepository) {
+	public CarController(CarRepository carRepository, CarModelAssembler assembler) {
 		this.carRepository = carRepository;
+		this.assembler = assembler;
 	}
 	
 	// Get all Cars
 	@GetMapping
-	public List<Car> getAllCars(){
-		return carRepository.findAll();
+	public CollectionModel<EntityModel<Car>> getAllCars(){
+		List<EntityModel<Car>> entityList = carRepository.findAll().stream()
+				.map(assembler::toModel)
+				.collect(Collectors.toList());
+		
+		return CollectionModel.of(entityList,
+				linkTo(methodOn(CarController.class).getAllCars()).withRel("cars"));
 	}
 	
 	// Get single Car by ID
@@ -43,26 +54,35 @@ public class CarController {
 		Car car = carRepository.findById(carId)
 				.orElseThrow(() -> new CarNotFoundException(carId));
 		
-		return EntityModel.of(car, 
-				linkTo(methodOn(CarController.class).getCar(carId)).withSelfRel(),
-				linkTo(methodOn(CarController.class).getAllCars()).withRel("cars"));
+		return assembler.toModel(car);
 	}
 	
 	// Find Cars by Brand ordered by year Desc
 	@GetMapping("/search/brand/{brand}")
-	public List<Car> findByBrandOrderByYearDesc(@PathVariable String brand){
-		return carRepository.findByBrandOrderByYearDesc(brand);
+	public CollectionModel<EntityModel<Car>> findByBrandOrderByYearDesc(@PathVariable String brand){
+		
+		List<EntityModel<Car>> entityList = 
+				carRepository.findByBrandOrderByYearDesc(brand).stream()
+				.map(assembler::toModel)
+				.collect(Collectors.toList());
+		
+		return CollectionModel.of(entityList);
 	}
 	
 	@PostMapping
-	public Car newCar(@RequestBody Car car) {
-		return carRepository.save(car);
+	public ResponseEntity<?> newCar(@RequestBody Car car) {
+		
+		EntityModel<Car> entityModel = assembler.toModel(carRepository.save(car));
+		
+		return ResponseEntity
+				.created(entityModel.getRequiredLink(IanaLinkRelations.SELF).toUri())
+				.body(entityModel);
 	}
 	
 	// Update a Car information
 	@PutMapping("/{carId}")
-	public Car updateCarInfo(@RequestBody Car newCar, @PathVariable Long carId) {
-		return carRepository.findById(carId)
+	public ResponseEntity<?> updateCarInfo(@RequestBody Car newCar, @PathVariable Long carId) {
+		Car updatedCar = carRepository.findById(carId)
 				.map(car -> {
 					car.setBrand(newCar.getBrand());
 					car.setColor(newCar.getColor());
@@ -78,12 +98,20 @@ public class CarController {
 					newCar.setCarId(carId);
 					return carRepository.save(newCar);
 				});
+		
+		EntityModel<Car> entityModel = assembler.toModel(updatedCar);
+		
+		return ResponseEntity
+				.created(entityModel.getRequiredLink(IanaLinkRelations.SELF).toUri())
+				.body(entityModel);
 	}
 	
 	// Delete a Car
 	@DeleteMapping("/{carId}")
-	public void deleteCar(@PathVariable Long carId) {
+	public ResponseEntity<?> deleteCar(@PathVariable Long carId) {
 		carRepository.deleteById(carId);
+		
+		return ResponseEntity.noContent().build();
 	}
 	
 }
